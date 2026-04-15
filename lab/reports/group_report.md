@@ -41,20 +41,39 @@ _________________
 
 ### 2a. Bảng metric_impact (bắt buộc — chống trivial)
 
-| Rule / Expectation mới (tên ngắn) | Trước (số liệu) | Sau / khi inject (số liệu) | Chứng cứ (log / CSV / commit) |
-|-----------------------------------|------------------|-----------------------------|-------------------------------|
-| … | … | … | … |
+**Cleaning Rules mới:**
+
+| Rule mới | Hành động | Trước (run 10 records) | Sau inject (run 13 records) | Chứng cứ |
+|----------|-----------|------------------------|-----------------------------|-----------| 
+| R7: `strip_bom_unicode` | Strip BOM `\ufeff` / NBSP / zero-width khỏi chunk_text; quarantine nếu text chỉ toàn invisible | cleaned=5, quarantine=5 | quarantine +1 khi inject dòng có BOM prefix | quarantine_sprint2.csv reason=`invisible_only_chunk_text` |
+| R8: `future_exported_at` | Quarantine nếu `exported_at` > now + 24h (lỗi clock / data fabrication) | cleaned=5, quarantine=5 | quarantine +1 khi inject dòng `exported_at=2099-01-01` | quarantine_sprint2.csv reason=`future_exported_at` |
+| R9: `internal_note_leak` | Strip marker nội bộ `(ghi chú:...lỗi migration)` khỏi chunk_text | Row 4 sau fix 14→7 vẫn chứa annotation nội bộ | Chunk cleaned không còn `(ghi chú:...)` | Diff cleaned CSV trước/sau |
+| R10: `chunk_text_too_short` | Quarantine nếu chunk_text < 20 ký tự | cleaned=5 | quarantine +1 khi inject dòng `chunk_text="OK"` | quarantine_sprint2.csv reason=`chunk_text_too_short` |
+
+**Expectation mới:**
+
+| Expectation mới | Severity | Trước (run 10 records) | Sau inject (run 13 records) | Chứng cứ |
+|-----------------|----------|------------------------|-----------------------------|-----------| 
+| E7: `no_empty_exported_at` | warn | OK, empty=0 | OK, empty=0 | Log: `empty_exported_at_count=0` |
+| E8: `chunk_id_unique` | halt | OK, dup=0 | OK, dup=0 | Log: `duplicate_chunk_ids=0` |
+| E9: `no_invisible_chars_in_chunk_text` | halt | OK, violations=0 | OK, violations=0 | Rule R7 strip BOM trước → expectation pass |
+| E10: `no_internal_note_leak` | halt | OK, violations=0 | OK, violations=0 | Rule R9 strip ghi chú trước → expectation pass |
+| E11: `chunk_min_length_20` | halt | OK, short=0 | OK, short=0 | Rule R10 quarantine chunk ngắn trước → expectation pass |
+| E12: `exported_at_not_future_24h` | halt | OK, future=0 | **FAIL, future=1 → PIPELINE_HALT** | Dòng inject `exported_at` tương lai bị bắt |
 
 **Rule chính (baseline + mở rộng):**
 
-- …
+- Baseline (6 rule): allowlist doc_id, chuẩn hoá ngày ISO, quarantine HR cũ <2026, quarantine text rỗng, dedupe, fix refund 14→7 ngày
+- Rule mới R7: Strip BOM / Unicode control characters — tránh nhiễu embedding + dedupe fail
+- Rule mới R8: Quarantine `exported_at` tương lai — ngăn data fabrication / lỗi clock
+- Rule mới R9: Strip marker nội bộ `(ghi chú:...lỗi migration)` — tránh context misleading cho retrieval
+- Rule mới R10: Quarantine chunk_text quá ngắn (<20 ký tự) — tránh embedding noise
 
-**Ví dụ 1 lần expectation fail (nếu có) và cách xử lý:**
+**Ví dụ 1 lần expectation fail và cách xử lý:**
 
-_________________
+Khi inject 3 dòng mới vào CSV (raw 10→13), expectation E12 `exported_at_not_future_24h` phát hiện 1 dòng có `exported_at` ở tương lai và halt pipeline (`future_rows=1`). Pipeline dừng đúng thiết kế — không embed data bất thường vào ChromaDB. Xử lý: xóa dòng inject hoặc sửa `exported_at` về quá khứ → chạy lại → E12 OK, PIPELINE_OK.
 
 ---
-
 ## 3. Before / after ảnh hưởng retrieval hoặc agent (200–250 từ)
 
 > Bắt buộc: inject corruption (Sprint 3) — mô tả + dẫn `artifacts/eval/…` hoặc log.
