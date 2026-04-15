@@ -59,21 +59,17 @@ Bằng cách quarantine sớm ở Rule 9, tôi loại hẳn chunk có metadata n
 
 **run_id:** `sprint2-with-new-rules`
 
-**Trước (chỉ baseline, không có rule mới):**
-```
-raw_records=13, cleaned_records=9, quarantine_records=4
-```
-Chunk chứa `(ghi chú:…lỗi migration)` và chunk `"Xem thêm."` (9 chars) vẫn nằm trong cleaned → embedding bị nhiễu.
+Trước khi thêm rule mới, log cho thấy:
+`raw_records=13, cleaned_records=9, quarantine_records=4`.
+Khi đó, chunk có ghi chú nội bộ `(ghi chú: ... lỗi migration)` và chunk quá ngắn `"Xem thêm."` vẫn lọt vào cleaned, làm nhiễu dữ liệu embed.
 
-**Sau (có 4 rule mới):**
-```
-raw_records=13, cleaned_records=7, quarantine_records=6
-```
-Quarantine CSV có thêm:
+Sau khi thêm 4 rule R7-R10, kết quả đổi thành:
+`raw_records=13, cleaned_records=7, quarantine_records=6`.
+Trong `quarantine` xuất hiện thêm hai bằng chứng rõ ràng:
 - `chunk_id=3, reason=internal_note_leak` (Rule 9)
 - `chunk_id=13, reason=chunk_text_too_short` (Rule 10)
 
-**Delta:** `quarantine_records` +2 (chưa tính Rule 8 do bug timezone — sau fix sẽ +3).
+Tóm lại, delta chính là `quarantine_records +2`, giúp loại dữ liệu kém chất lượng khỏi cleaned trước khi embed. (Rule 8 ban đầu bị bug timezone; sau khi fix, số quarantine tăng thêm theo đúng kỳ vọng.)
 
 ---
 
