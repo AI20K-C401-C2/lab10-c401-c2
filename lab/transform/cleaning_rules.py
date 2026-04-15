@@ -3,6 +3,12 @@ Cleaning rules — raw export → cleaned rows + quarantine.
 
 Baseline gồm các failure mode mở rộng (allowlist doc_id, parse ngày, HR stale version).
 Sinh viên thêm ≥3 rule mới: mỗi rule phải ghi `metric_impact` (xem README — chống trivial).
+
+Rule mới (sinh viên):
+7) Strip BOM / Unicode control chars — metric_impact: quarantine_records↑ khi inject BOM/zero-width.
+8) Quarantine exported_at tương lai (>24h) — metric_impact: quarantine_records↑ khi inject future timestamp.
+9) Quarantine chunk chứa ghi chú nội bộ / marker migration lỗi — metric_impact: quarantine_records↑, hits_forbidden↓.
+10) Quarantine chunk_text quá ngắn (<20 chars) — metric_impact: cleaned_records↓, retrieval precision↑.
 """
 
 from __future__ import annotations
@@ -10,6 +16,7 @@ from __future__ import annotations
 import csv
 import hashlib
 import re
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
@@ -25,6 +32,16 @@ ALLOWED_DOC_IDS = frozenset(
 
 _ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _DMY_SLASH = re.compile(r"^(\d{2})/(\d{2})/(\d{4})$")
+
+# Rule 7: Ký tự BOM / zero-width / NBSP cần strip
+_INVISIBLE_CHARS = re.compile(r"[\ufeff\u200b\u200c\u200d\u2060\u00a0\ufffe]")
+
+# Rule 9: Pattern ghi chú nội bộ / migration lỗi lẫn trong chunk_text
+_INTERNAL_NOTE = re.compile(r"\(ghi chú:.*?\)", re.IGNORECASE | re.DOTALL)
+_MIGRATION_ERROR = re.compile(r"lỗi migration", re.IGNORECASE)
+
+# Rule 10: Ngưỡng tối thiểu chunk_text để mang đủ ngữ nghĩa cho embedding
+_MIN_CHUNK_LENGTH = 20
 
 
 def _norm_text(s: str) -> str:
@@ -77,6 +94,12 @@ def clean_rows(
     4) Quarantine: chunk_text rỗng hoặc effective_date rỗng sau chuẩn hoá.
     5) Loại trùng nội dung chunk_text (giữ bản đầu).
     6) Fix stale refund: policy_refund_v4 chứa '14 ngày làm việc' → 7 ngày.
+
+    Rule mới (sinh viên):
+    7) Strip BOM/Unicode control chars; quarantine nếu text chỉ toàn invisible chars.
+    8) Quarantine nếu exported_at là timestamp tương lai (>24h so với now).
+    9) Quarantine nếu chunk_text chứa ghi chú nội bộ / marker migration lỗi.
+    10) Quarantine nếu chunk_text quá ngắn (<20 ký tự) — không đủ ngữ nghĩa cho embedding.
     """
     quarantine: List[Dict[str, Any]] = []
     seen_text: set[str] = set()
@@ -113,6 +136,37 @@ def clean_rows(
 
         if not text:
             quarantine.append({**raw, "reason": "missing_chunk_text"})
+            continue
+
+        # ── Rule 7: Strip BOM / Unicode control characters ──
+        # metric_impact: quarantine_records↑ khi inject BOM/zero-width chars
+        text = _INVISIBLE_CHARS.sub("", text).strip()
+        if not text:
+            quarantine.append({**raw, "reason": "invisible_only_chunk_text"})
+            continue
+
+        # ── Rule 8: Quarantine exported_at tương lai (>24h so với now) ──
+        # metric_impact: quarantine_records↑ khi inject future timestamp
+        if exported_at:
+            try:
+                exp_dt = datetime.fromisoformat(exported_at.replace("Z", "+00:00"))
+                now_utc = datetime.now(timezone.utc)
+                if exp_dt > now_utc + timedelta(hours=24):
+                    quarantine.append({**raw, "reason": "future_exported_at", "exported_at_raw": exported_at})
+                    continue
+            except (ValueError, TypeError):
+                pass  # exported_at không parse được → không block, chỉ giữ nguyên
+
+        # ── Rule 9: Quarantine chunk chứa ghi chú nội bộ / migration lỗi ──
+        # metric_impact: quarantine_records↑, hits_forbidden cải thiện khi eval
+        if _INTERNAL_NOTE.search(text) or _MIGRATION_ERROR.search(text):
+            quarantine.append({**raw, "reason": "internal_note_leak"})
+            continue
+
+        # ── Rule 10: Quarantine chunk_text quá ngắn (<20 ký tự) ──
+        # metric_impact: cleaned_records↓, retrieval precision↑
+        if len(text.strip()) < _MIN_CHUNK_LENGTH:
+            quarantine.append({**raw, "reason": "chunk_text_too_short"})
             continue
 
         key = _norm_text(text)
