@@ -112,5 +112,30 @@ def run_expectations(cleaned_rows: List[Dict[str, Any]]) -> Tuple[List[Expectati
         )
     )
 
+    # E7: exported_at không được rỗng
+    bad_exported_at = [r for r in cleaned_rows if not (r.get("exported_at") or "").strip()]
+    ok7 = len(bad_exported_at) == 0
+    results.append(
+        ExpectationResult(
+            "no_empty_exported_at",
+            ok7,
+            "warn",
+            f"empty_exported_at_count={len(bad_exported_at)}",
+        )
+    )
+
+    # E8: chunk_id phải duy nhất
+    chunk_ids = [r.get("chunk_id") for r in cleaned_rows if (r.get("chunk_id") or "").strip()]
+    duplicate_chunk_ids = sorted({chunk_id for chunk_id in chunk_ids if chunk_ids.count(chunk_id) > 1})
+    ok8 = len(duplicate_chunk_ids) == 0
+    results.append(
+        ExpectationResult(
+            "chunk_id_unique",
+            ok8,
+            "halt",
+            f"duplicate_chunk_ids={len(duplicate_chunk_ids)}",
+        )
+    )
+
     halt = any(not r.passed and r.severity == "halt" for r in results)
     return results, halt
