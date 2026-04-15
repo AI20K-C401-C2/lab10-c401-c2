@@ -69,6 +69,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     cleaned, quarantine = clean_rows(
         rows,
         apply_refund_window_fix=not args.no_refund_fix,
+        skip_internal_note_filter=args.no_internal_note_filter,
     )
     cleaned_path = CLEAN_DIR / f"cleaned_{run_id.replace(':', '-')}.csv"
     quar_path = QUAR_DIR / f"quarantine_{run_id.replace(':', '-')}.csv"
@@ -204,6 +205,11 @@ def main() -> int:
         "--skip-validate",
         action="store_true",
         help="Vẫn embed khi expectation halt (chỉ phục vụ demo có chủ đích).",
+    )
+    p_run.add_argument(
+        "--no-internal-note-filter",
+        action="store_true",
+        help="Bỏ qua Rule 9 (quarantine ghi chú nội bộ) — dùng cho inject corruption demo.",
     )
     p_run.set_defaults(func=cmd_run)
 

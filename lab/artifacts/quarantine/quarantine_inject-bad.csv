@@ -1,0 +1,7 @@
+chunk_id,doc_id,chunk_text,effective_date,exported_at,reason,effective_date_normalized,exported_at_raw
+2,policy_refund_v4,Yêu cầu được gửi trong vòng 7 ngày làm việc kể từ thời điểm xác nhận đơn hàng.,2026-02-01,2026-04-10T08:00:00,duplicate_chunk_text,,
+5,policy_refund_v4,,,2026-04-10T08:00:00,missing_effective_date,,
+7,hr_leave_policy,Nhân viên dưới 3 năm kinh nghiệm được 10 ngày phép năm (bản HR 2025).,2025-01-01,2026-04-10T08:00:00,stale_hr_policy_effective_date,2025-01-01,
+9,legacy_catalog_xyz_zzz,Chunk nội dung đủ dài để vượt ngưỡng expectation độ dài tối thiểu trong cleaned export.,2026-02-01,2026-04-10T08:00:00,unknown_doc_id,,
+12,it_helpdesk_faq,Hướng dẫn reset mật khẩu: vào portal IT → chọn Reset → xác nhận email.,2026-02-01,2099-12-31T23:59:59,future_exported_at,,2099-12-31T23:59:59
+13,policy_refund_v4,Xem thêm.,2026-02-01,2026-04-10T08:00:00,chunk_text_too_short,,

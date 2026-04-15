@@ -83,6 +83,7 @@ def clean_rows(
     rows: List[Dict[str, str]],
     *,
     apply_refund_window_fix: bool = True,
+    skip_internal_note_filter: bool = False,
 ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     """
     Trả về (cleaned, quarantine).
@@ -150,6 +151,9 @@ def clean_rows(
         if exported_at:
             try:
                 exp_dt = datetime.fromisoformat(exported_at.replace("Z", "+00:00"))
+                # Nếu naive datetime (không có tzinfo), gán UTC để so sánh an toàn
+                if exp_dt.tzinfo is None:
+                    exp_dt = exp_dt.replace(tzinfo=timezone.utc)
                 now_utc = datetime.now(timezone.utc)
                 if exp_dt > now_utc + timedelta(hours=24):
                     quarantine.append({**raw, "reason": "future_exported_at", "exported_at_raw": exported_at})
@@ -159,7 +163,7 @@ def clean_rows(
 
         # ── Rule 9: Quarantine chunk chứa ghi chú nội bộ / migration lỗi ──
         # metric_impact: quarantine_records↑, hits_forbidden cải thiện khi eval
-        if _INTERNAL_NOTE.search(text) or _MIGRATION_ERROR.search(text):
+        if not skip_internal_note_filter and (_INTERNAL_NOTE.search(text) or _MIGRATION_ERROR.search(text)):
             quarantine.append({**raw, "reason": "internal_note_leak"})
             continue
 
