@@ -150,6 +150,9 @@ def clean_rows(
         if exported_at:
             try:
                 exp_dt = datetime.fromisoformat(exported_at.replace("Z", "+00:00"))
+                # Nếu naive datetime (không có tzinfo), gán UTC để so sánh an toàn
+                if exp_dt.tzinfo is None:
+                    exp_dt = exp_dt.replace(tzinfo=timezone.utc)
                 now_utc = datetime.now(timezone.utc)
                 if exp_dt > now_utc + timedelta(hours=24):
                     quarantine.append({**raw, "reason": "future_exported_at", "exported_at_raw": exported_at})
