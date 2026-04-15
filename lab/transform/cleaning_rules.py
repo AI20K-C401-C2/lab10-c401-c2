@@ -83,6 +83,7 @@ def clean_rows(
     rows: List[Dict[str, str]],
     *,
     apply_refund_window_fix: bool = True,
+    skip_internal_note_filter: bool = False,
 ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     """
     Trả về (cleaned, quarantine).
@@ -162,7 +163,7 @@ def clean_rows(
 
         # ── Rule 9: Quarantine chunk chứa ghi chú nội bộ / migration lỗi ──
         # metric_impact: quarantine_records↑, hits_forbidden cải thiện khi eval
-        if _INTERNAL_NOTE.search(text) or _MIGRATION_ERROR.search(text):
+        if not skip_internal_note_filter and (_INTERNAL_NOTE.search(text) or _MIGRATION_ERROR.search(text)):
             quarantine.append({**raw, "reason": "internal_note_leak"})
             continue
 
