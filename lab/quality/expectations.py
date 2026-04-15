@@ -191,6 +191,9 @@ def run_expectations(cleaned_rows: List[Dict[str, Any]]) -> Tuple[List[Expectati
             continue
         try:
             exp_dt = datetime.fromisoformat(exported_at.replace("Z", "+00:00"))
+            if exp_dt.tzinfo is None:
+                exp_dt = exp_dt.replace(tzinfo=timezone.utc)
+
             if exp_dt > now_utc + timedelta(hours=24):
                 future_exported_at.append(r)
         except ValueError:
